@@ -1,0 +1,5 @@
+export enum EndCondition {
+  FIXED_ROUNDS = "FIXED_ROUNDS",
+  FIXED_DURATION = "FIXED_DURATION",
+  MANUAL = "MANUAL",
+}

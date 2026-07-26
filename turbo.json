@@ -20,5 +20,6 @@
       "cache": false,
       "persistent": true
     }
-  }
+  },
+  "globalEnv": ["DATABASE_URL", "PORT", "CORS_ORIGIN", "TURN_TIMER_TICK_MS", "NEXT_PUBLIC_API_URL"]
 }

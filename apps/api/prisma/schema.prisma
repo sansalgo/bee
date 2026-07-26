@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum GameStatus {
+  LOBBY
+  IN_PROGRESS
+  FINISHED
+  ABANDONED
+}
+
+enum TurnOutcome {
+  PLACE
+  FIND
+  SKIPPED_TIMEOUT
+  SKIPPED_DISCONNECTED
+}
+
+model Game {
+  id                  String    @id @default(cuid())
+  code                String    @unique
+  status              GameStatus @default(LOBBY)
+  categoryKey         String
+  // Validated GameConfigSchema (packages/shared) snapshot taken at creation
+  // time — the authoritative source for turn limit, end condition, and
+  // category-specific config, so new categories never require new columns.
+  config              Json
+  hostTokenHash       String
+  currentRoundIdx     Int       @default(0)
+  currentTurnPlayerId String?
+  turnStartedAt       DateTime?
+  turnDeadline        DateTime?
+  gameEndsAt          DateTime?
+  startedAt           DateTime?
+  finishedAt          DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  players Player[]
+  tiles   BoardTile[]
+  turns   Turn[]
+  finds   Find[]
+
+  @@index([status])
+}
+
+model Player {
+  id              String    @id @default(cuid())
+  gameId          String
+  game            Game      @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  nickname        String
+  playerTokenHash String
+  score           Int       @default(0)
+  isHost          Boolean   @default(false)
+  joinOrder       Int
+  isConnected     Boolean   @default(true)
+  isReady         Boolean   @default(false)
+  disconnectedAt  DateTime?
+  createdAt       DateTime  @default(now())
+
+  placedTiles BoardTile[] @relation("PlacedBy")
+  turns       Turn[]
+  finds       Find[]
+
+  @@unique([gameId, nickname])
+  @@index([gameId])
+}
+
+model BoardTile {
+  id               String   @id @default(cuid())
+  gameId           String
+  game             Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  character        String   @db.Char(1)
+  placedByPlayerId String
+  placedByPlayer   Player   @relation("PlacedBy", fields: [placedByPlayerId], references: [id])
+  placedAtTurnId   String
+  placedAtTurn     Turn     @relation(fields: [placedAtTurnId], references: [id])
+  // Monotonic counter for stable ordering only — NOT a spatial coordinate.
+  // The board has no positions; the frontend renders tile layout cosmetically.
+  sequenceNo       Int
+  // Not @unique: one Find (e.g. "UP") legitimately consumes multiple tiles,
+  // so this is a many-tiles-to-one-find relation, not one-to-one.
+  consumedByFindId String?
+  consumedByFind   Find?    @relation(fields: [consumedByFindId], references: [id])
+  createdAt        DateTime @default(now())
+
+  @@index([gameId, consumedByFindId])
+}
+
+model Turn {
+  id          String       @id @default(cuid())
+  gameId      String
+  game        Game         @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  playerId    String
+  player      Player       @relation(fields: [playerId], references: [id])
+  roundIdx    Int
+  turnIdx     Int
+  startedAt   DateTime     @default(now())
+  deadline    DateTime
+  resolvedAt  DateTime?
+  outcome     TurnOutcome?
+  placedTiles BoardTile[]
+  find        Find?
+
+  @@index([gameId, roundIdx])
+}
+
+// A Find is deliberately category-agnostic: it references which category
+// record was matched via (categoryKey, itemId) instead of a Prisma relation,
+// since itemId points into a different table per category (Movie now, future
+// Plant/Bird/... tables later). This is the one accepted "soft FK" in the
+// schema — enforced by the category plugin at the application layer, not by
+// Postgres — so adding a category never requires a Find migration.
+model Find {
+  id            String      @id @default(cuid())
+  gameId        String
+  game          Game        @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  playerId      String
+  player        Player      @relation(fields: [playerId], references: [id])
+  turnId        String      @unique
+  turn          Turn        @relation(fields: [turnId], references: [id])
+  categoryKey   String
+  itemId        String
+  matchedText   String
+  pointsAwarded Int
+  tiles         BoardTile[]
+  createdAt     DateTime    @default(now())
+
+  @@index([gameId, categoryKey, itemId])
+}
+
+// ---------- Category: Movies (v1 concrete plugin) ----------
+
+model Movie {
+  id            String   @id @default(cuid())
+  title         String
+  releaseYear   Int
+  // normalize(title): uppercased, all non-alphanumeric characters stripped
+  // (see MoviesValidator.normalize) — the key used for tile-sequence matching.
+  normalizedKey String
+  isFixture     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+
+  // Same title text can legitimately recur across different release years
+  // (e.g. remakes) — those are different records and both must be
+  // independently findable. This constraint just makes re-imports idempotent.
+  @@unique([normalizedKey, releaseYear])
+  @@index([normalizedKey])
+}

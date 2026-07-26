@@ -1,0 +1,6 @@
+export enum GameStatus {
+  LOBBY = "LOBBY",
+  IN_PROGRESS = "IN_PROGRESS",
+  FINISHED = "FINISHED",
+  ABANDONED = "ABANDONED",
+}
