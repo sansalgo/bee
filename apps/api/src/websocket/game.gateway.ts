@@ -113,8 +113,22 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
   async handleRoomLeave(@ConnectedSocket() socket: GameSocket) {
     const { gameId, playerId } = socket.data
     await socket.leave(gameId)
-    if (playerId) {
-      this.server.to(gameId).emit(SocketEvent.PlayerLeft, { playerId })
+    if (!playerId) {
+      return
+    }
+    this.server.to(gameId).emit(SocketEvent.PlayerLeft, { playerId })
+
+    const result = await this.gamesService.leaveGame(gameId, playerId)
+    if (result.kind === "ended") {
+      this.server.to(gameId).emit(SocketEvent.GameFinished, { players: result.players } satisfies GameFinishedPayload)
+      return
+    }
+
+    // Every other branch keeps the game going (or stays in the lobby) — the
+    // roster still needs refreshing so everyone sees the leaver's hasLeft flag.
+    this.server.to(gameId).emit(SocketEvent.ScoreUpdated, { players: result.players } satisfies ScoreUpdatedPayload)
+    if (result.kind === "turn-advanced") {
+      this.broadcastTurnResolution(gameId, playerId, result.resolvedTurnId, TurnOutcome.SKIPPED_DISCONNECTED, result.advance)
     }
   }
 
@@ -161,7 +175,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     if (!playerId) {
       throw new WsException("Only seated players can place tiles")
     }
-    const result = await this.gamesService.placeTile(gameId, playerId, body.character)
+    const result = await this.gamesService.placeTile(gameId, playerId, body.character, body.x, body.y)
     this.server.to(gameId).emit(SocketEvent.BoardUpdated, {
       tiles: [
         {
@@ -170,6 +184,8 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
           placedByPlayerId: result.tile.placedByPlayerId,
           sequenceNo: result.tile.sequenceNo,
           consumed: result.tile.consumed,
+          x: result.tile.x,
+          y: result.tile.y,
         },
       ],
     })
@@ -198,6 +214,8 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
         placedByPlayerId: tile.placedByPlayerId,
         sequenceNo: tile.sequenceNo,
         consumed: true,
+        x: tile.x,
+        y: tile.y,
       })),
     })
     this.server.to(gameId).emit(SocketEvent.ScoreUpdated, {
@@ -216,7 +234,7 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     gameId: string,
     playerId: string,
     turnId: string,
-    outcome: TurnOutcome.PLACE | TurnOutcome.FIND,
+    outcome: TurnOutcome.PLACE | TurnOutcome.FIND | TurnOutcome.SKIPPED_DISCONNECTED,
     advance: AdvanceResult,
   ) {
     this.server.to(gameId).emit(SocketEvent.TurnEnded, { turnId, playerId, outcome } satisfies TurnEnded)
@@ -251,6 +269,8 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
           placedByPlayerId: tile.placedByPlayerId,
           sequenceNo: tile.sequenceNo,
           consumed: tile.consumed,
+          x: tile.x,
+          y: tile.y,
         })),
         currentTurn: runtime.currentTurn
           ? {

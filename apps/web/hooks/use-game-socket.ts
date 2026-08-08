@@ -63,7 +63,8 @@ export function useGameSocket(identity: RoomIdentity | null) {
     emitReady: (ready: boolean) => socketRef.current?.emit(SocketEvent.PlayerReady, { ready }),
     emitStart: () => socketRef.current?.emit(SocketEvent.GameStart),
     emitEnd: () => socketRef.current?.emit(SocketEvent.GameEnd),
-    emitPlaceTile: (character: string) => socketRef.current?.emit(SocketEvent.TilePlace, { character }),
+    emitPlaceTile: (character: string, x: number, y: number) =>
+      socketRef.current?.emit(SocketEvent.TilePlace, { character, x, y }),
     emitSubmitTitle: (tileIds: string[]) => socketRef.current?.emit(SocketEvent.TitleSubmit, { tileIds }),
     emitLeave: () => socketRef.current?.emit(SocketEvent.RoomLeave),
   }

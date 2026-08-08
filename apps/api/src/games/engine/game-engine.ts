@@ -10,6 +10,7 @@ export interface RuntimePlayer {
   score: number
   isConnected: boolean
   isReady: boolean
+  hasLeft: boolean
 }
 
 export interface RuntimeTile {
@@ -18,6 +19,8 @@ export interface RuntimeTile {
   placedByPlayerId: string
   sequenceNo: number
   consumed: boolean
+  x: number
+  y: number
 }
 
 export interface RuntimeTurn {
@@ -55,16 +58,44 @@ export function computeTurnDeadline(config: GameConfig): Date {
   return new Date(Date.now() + config.turnTimeLimitSec * 1000)
 }
 
-/** Metadata for the turn that would follow the current one, before it's created. */
-export function computeNextTurnMeta(game: RuntimeGame): { playerIndex: number; roundIdx: number; turnIdx: number } {
+/**
+ * Metadata for the turn that would follow the current one, before it's
+ * created. Rotation always walks the full, stably-ordered `game.players`
+ * array (never reordered or pruned on leave) so a departed player's old
+ * slot is skipped rather than shifting everyone else's position.
+ */
+export function computeNextTurnMeta(game: RuntimeGame): { playerId: string; roundIdx: number; turnIdx: number } {
   if (!game.currentTurn) {
-    return { playerIndex: 0, roundIdx: 0, turnIdx: 0 }
+    const first = game.players.find((player) => !player.hasLeft)
+    if (!first) {
+      throw new Error(`No active players remain in game ${game.gameId}`)
+    }
+    return { playerId: first.id, roundIdx: 0, turnIdx: 0 }
   }
+
   const currentIndex = game.players.findIndex((player) => player.id === game.currentTurn?.playerId)
-  const nextIndex = (currentIndex + 1) % game.players.length
-  const wrapped = nextIndex === 0
+  const total = game.players.length
+  let wrapped = false
+  let nextIndex = currentIndex
+
+  for (let step = 1; step <= total; step++) {
+    const candidateIndex = (currentIndex + step) % total
+    if (candidateIndex <= currentIndex) {
+      wrapped = true
+    }
+    if (!game.players[candidateIndex]?.hasLeft) {
+      nextIndex = candidateIndex
+      break
+    }
+  }
+
+  const nextPlayer = game.players[nextIndex]
+  if (!nextPlayer) {
+    throw new Error(`No active players remain in game ${game.gameId}`)
+  }
+
   return {
-    playerIndex: nextIndex,
+    playerId: nextPlayer.id,
     roundIdx: wrapped ? game.currentTurn.roundIdx + 1 : game.currentTurn.roundIdx,
     turnIdx: game.currentTurn.turnIdx + 1,
   }

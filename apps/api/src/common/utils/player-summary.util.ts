@@ -7,6 +7,7 @@ export function toPlayerSummary(player: {
   isHost: boolean
   isConnected: boolean
   isReady: boolean
+  hasLeft: boolean
   joinOrder: number
 }): PlayerSummary {
   return {
@@ -16,6 +17,7 @@ export function toPlayerSummary(player: {
     isHost: player.isHost,
     isConnected: player.isConnected,
     isReady: player.isReady,
+    hasLeft: player.hasLeft,
     joinOrder: player.joinOrder,
   }
 }

@@ -28,6 +28,7 @@ export const playerSummarySchema = z.object({
   isHost: z.boolean(),
   isConnected: z.boolean(),
   isReady: z.boolean(),
+  hasLeft: z.boolean(),
   joinOrder: z.number().int(),
 })
 export type PlayerSummary = z.infer<typeof playerSummarySchema>

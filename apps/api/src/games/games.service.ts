@@ -12,6 +12,7 @@ import { applyPlaceTile } from "./engine/actions/place-tile.action"
 import { computeNextTurnMeta, computeTurnDeadline, shouldEndBeforeNextTurn } from "./engine/game-engine"
 import type { RuntimeGame, RuntimePlayer, RuntimeTile, RuntimeTurn } from "./engine/game-engine"
 import { GameStateStore } from "./engine/game-state.store"
+import { resolveTilePosition } from "./engine/resolve-tile-position"
 import { TurnTimerService } from "./engine/turn-timer.service"
 import { GameEventsBus } from "./game-events.bus"
 
@@ -35,6 +36,19 @@ export type FindTitleResult =
       resolvedTurnId: string
       advance: AdvanceResult
     }
+
+// `players` is included on every branch (freshly reflecting the leaver's
+// hasLeft flag) so the gateway can always rebroadcast an up-to-date roster,
+// regardless of which phase the game was in.
+export type LeaveGameResult =
+  // Lobby phase (or the game already finished) — no RuntimeGame to update.
+  | { kind: "no-runtime"; players: PlayerSummary[] }
+  // Game continues and the leaver didn't hold the current turn.
+  | { kind: "unaffected"; players: PlayerSummary[] }
+  // Game continues, the leaver held the current turn, and it's been handed off.
+  | { kind: "turn-advanced"; resolvedTurnId: string; advance: AdvanceResult; players: PlayerSummary[] }
+  // Too few active players remain to continue — game ends immediately.
+  | { kind: "ended"; players: PlayerSummary[] }
 
 @Injectable()
 export class GamesService {
@@ -86,7 +100,8 @@ export class GamesService {
     if (game.status !== PrismaGameStatus.LOBBY) {
       throw new WsException("Game has already started")
     }
-    if (game.players.length < MIN_PLAYERS) {
+    const activePlayerCount = game.players.filter((p) => !p.hasLeft).length
+    if (activePlayerCount < MIN_PLAYERS) {
       throw new WsException(`At least ${MIN_PLAYERS} players are required to start`)
     }
 
@@ -107,6 +122,7 @@ export class GamesService {
         score: p.score,
         isConnected: p.isConnected,
         isReady: p.isReady,
+        hasLeft: p.hasLeft,
       })),
       tiles: [],
       foundItemIds: [],
@@ -116,7 +132,7 @@ export class GamesService {
     }
     this.store.set(runtime)
 
-    const firstPlayer = runtime.players[0]
+    const firstPlayer = runtime.players.find((p) => !p.hasLeft)
     if (!firstPlayer) {
       throw new WsException("No players to start the game with")
     }
@@ -160,10 +176,13 @@ export class GamesService {
 
   // ---------- In-turn actions ----------
 
-  async placeTile(gameId: string, playerId: string, character: string): Promise<PlaceTileResult> {
+  async placeTile(gameId: string, playerId: string, character: string, x: number, y: number): Promise<PlaceTileResult> {
     const game = this.store.get(gameId)
     this.assertCurrentTurn(game, playerId)
     const turnId = game.currentTurn!.turnId
+
+    const occupied = game.tiles.filter((tile) => !tile.consumed).map((tile) => ({ x: tile.x, y: tile.y }))
+    const resolved = resolveTilePosition(occupied, { x, y })
 
     const row = await this.prisma.boardTile.create({
       data: {
@@ -172,6 +191,8 @@ export class GamesService {
         placedByPlayerId: playerId,
         placedAtTurnId: turnId,
         sequenceNo: game.tileSequenceCounter,
+        x: resolved.x,
+        y: resolved.y,
       },
     })
     const tile: RuntimeTile = {
@@ -180,6 +201,8 @@ export class GamesService {
       placedByPlayerId: row.placedByPlayerId,
       sequenceNo: row.sequenceNo,
       consumed: false,
+      x: row.x,
+      y: row.y,
     }
     applyPlaceTile(game, tile)
     game.tileSequenceCounter++
@@ -238,6 +261,70 @@ export class GamesService {
       resolvedTurnId: turnId,
       advance,
     }
+  }
+
+  // ---------- Leave (any phase, any time) ----------
+
+  async leaveGame(gameId: string, playerId: string): Promise<LeaveGameResult> {
+    await this.prisma.player.update({
+      where: { id: playerId },
+      data: { hasLeft: true, isConnected: false, disconnectedAt: new Date() },
+    })
+
+    if (!this.store.has(gameId)) {
+      const players = await this.prisma.player.findMany({ where: { gameId }, orderBy: { joinOrder: "asc" } })
+      return { kind: "no-runtime", players: players.map(toPlayerSummary) }
+    }
+
+    const game = this.store.get(gameId)
+    const player = game.players.find((p) => p.id === playerId)
+    if (player) {
+      player.hasLeft = true
+      player.isConnected = false
+    }
+    if (game.status !== PrismaGameStatus.IN_PROGRESS) {
+      return { kind: "no-runtime", players: game.players.map(toPlayerSummary) }
+    }
+
+    const wasCurrentTurn = game.currentTurn?.playerId === playerId
+    const activePlayerCount = game.players.filter((p) => !p.hasLeft).length
+
+    // Too few players left to keep playing — end the game outright, same as
+    // a manual host end, regardless of whose turn it was.
+    if (activePlayerCount < MIN_PLAYERS) {
+      this.timer.clear(gameId)
+      if (wasCurrentTurn) {
+        await this.prisma.turn.update({
+          where: { id: game.currentTurn!.turnId },
+          data: { outcome: "SKIPPED_DISCONNECTED", resolvedAt: new Date() },
+        })
+      }
+      await this.prisma.game.update({
+        where: { id: gameId },
+        data: {
+          status: PrismaGameStatus.FINISHED,
+          finishedAt: new Date(),
+          currentTurnPlayerId: null,
+          turnDeadline: null,
+        },
+      })
+      const players = game.players.map(toPlayerSummary)
+      this.store.delete(gameId)
+      return { kind: "ended", players }
+    }
+
+    if (!wasCurrentTurn) {
+      return { kind: "unaffected", players: game.players.map(toPlayerSummary) }
+    }
+
+    const turnId = game.currentTurn!.turnId
+    await this.prisma.turn.update({
+      where: { id: turnId },
+      data: { outcome: "SKIPPED_DISCONNECTED", resolvedAt: new Date() },
+    })
+    this.timer.clear(gameId)
+    const advance = await this.advanceTurn(game)
+    return { kind: "turn-advanced", resolvedTurnId: turnId, advance, players: game.players.map(toPlayerSummary) }
   }
 
   // ---------- Snapshot for reconnect ----------
@@ -303,9 +390,9 @@ export class GamesService {
       return { finished: true, players }
     }
 
-    const nextPlayer = game.players[meta.playerIndex]
+    const nextPlayer = game.players.find((p) => p.id === meta.playerId)
     if (!nextPlayer) {
-      throw new Error(`Invalid player index ${meta.playerIndex} for game ${game.gameId}`)
+      throw new Error(`Unknown next player ${meta.playerId} for game ${game.gameId}`)
     }
     const deadline = computeTurnDeadline(game.config)
     const turnRow = await this.prisma.turn.create({

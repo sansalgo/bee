@@ -31,3 +31,8 @@ export const MIN_GAME_DURATION_SEC = 60
 export const MAX_GAME_DURATION_SEC = 3600
 
 export const TIMER_TICK_INTERVAL_MS = 1000
+
+// Board tile footprint, shared by the client (rendering/drag clamping) and
+// the server (overlap resolution) so both agree on what "overlapping" means.
+export const TILE_SIZE_PX = 36
+export const TILE_GRID_PITCH_PX = TILE_SIZE_PX + 6

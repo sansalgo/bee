@@ -20,6 +20,7 @@ export function PlayerList({
           className={cn(
             "flex items-center justify-between border border-border px-2.5 py-1.5 text-xs",
             currentTurnPlayerId === player.id && "border-primary",
+            player.hasLeft && "opacity-50",
           )}
         >
           <span className="flex items-center gap-1.5">
@@ -33,10 +34,16 @@ export function PlayerList({
                 Host
               </Badge>
             )}
-            {player.isReady && (
+            {player.hasLeft ? (
               <Badge variant="secondary" className="h-4 px-1 text-[10px]">
-                Ready
+                Left
               </Badge>
+            ) : (
+              player.isReady && (
+                <Badge variant="secondary" className="h-4 px-1 text-[10px]">
+                  Ready
+                </Badge>
+              )
             )}
           </span>
           <span className="font-medium">{player.score}</span>

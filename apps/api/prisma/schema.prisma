@@ -60,6 +60,10 @@ model Player {
   joinOrder       Int
   isConnected     Boolean   @default(true)
   isReady         Boolean   @default(false)
+  // Set when the player deliberately leaves via room:leave, as opposed to a
+  // transient disconnect (isConnected). Permanently excludes them from turn
+  // rotation and MIN_PLAYERS checks — unlike isConnected, this never resets.
+  hasLeft         Boolean   @default(false)
   disconnectedAt  DateTime?
   createdAt       DateTime  @default(now())
 
@@ -81,8 +85,12 @@ model BoardTile {
   placedAtTurnId   String
   placedAtTurn     Turn     @relation(fields: [placedAtTurnId], references: [id])
   // Monotonic counter for stable ordering only — NOT a spatial coordinate.
-  // The board has no positions; the frontend renders tile layout cosmetically.
   sequenceNo       Int
+  // Drop position within the board, in the client's board-relative pixel
+  // space. Cosmetic (there's no gameplay meaning to a tile's coordinates)
+  // but persisted so every player sees a tile at the spot it was dropped.
+  x                Float    @default(0)
+  y                Float    @default(0)
   // Not @unique: one Find (e.g. "UP") legitimately consumes multiple tiles,
   // so this is a many-tiles-to-one-find relation, not one-to-one.
   consumedByFindId String?

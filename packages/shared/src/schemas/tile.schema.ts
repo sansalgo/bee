@@ -12,5 +12,7 @@ export const boardTileSchema = z.object({
   placedByPlayerId: z.string(),
   sequenceNo: z.number().int().nonnegative(),
   consumed: z.boolean(),
+  x: z.number(),
+  y: z.number(),
 })
 export type BoardTile = z.infer<typeof boardTileSchema>
