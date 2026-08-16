@@ -1,10 +1,12 @@
-# Multiplayer Word Game
+# Bee
 
-A Kahoot-style, turn-based multiplayer word game. Players place letter/number
-tiles onto a shared board; on their turn, a player may instead spend tiles
-already on the board to find a valid title from the active category (movies
-in v1) for points. The category system is pluggable — see
-`packages/shared/src/types/category-plugin.types.ts` and
+A real-time, turn-based multiplayer word game. Players place letter/number
+tiles onto a shared board via drag-and-drop; on their turn, a player may
+instead spend tiles already on the board to find a valid title from the
+active category (movies in v1) for points, with a live preview of the word
+being formed. Game state (turns, board updates, players joining or leaving)
+is synced across clients over Socket.IO. The category system is pluggable —
+see `packages/shared/src/types/category-plugin.types.ts` and
 `apps/api/src/categories/movies` for the reference implementation.
 
 ## Stack
@@ -41,6 +43,27 @@ bun --cwd apps/api prisma db seed   # seeds ~10 fixture movies for local dev
 
 ```bash
 bun run dev   # starts apps/web on :3000 and apps/api on :4000 via turbo
+```
+
+## Common commands
+
+Run from the repo root (via turbo, across all workspaces):
+
+```bash
+bun run dev         # start web + api in watch mode
+bun run build       # build all apps/packages
+bun run lint        # lint all apps/packages
+bun run format      # format with prettier
+bun run typecheck   # type-check all apps/packages
+```
+
+Scope any of these to a single workspace with `--filter`, e.g.
+`bun run dev --filter=web`. Database and Prisma commands live in `apps/api`:
+
+```bash
+bun --cwd apps/api prisma migrate dev   # apply/create migrations
+bun --cwd apps/api prisma db seed       # seed dev fixtures
+bun --cwd apps/api prisma studio        # browse the database
 ```
 
 ## Importing a real movie dataset
