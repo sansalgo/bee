@@ -99,7 +99,7 @@ export function PlayClient({ code }: { code: string }) {
             <TilePicker disabled={!isMyTurn} />
           </div>
 
-          <Board tiles={tiles} disabled={!isMyTurn} onSubmit={(tileIds) => emitSubmitTitle(tileIds)} />
+          <Board tiles={tiles} submitDisabled={!isMyTurn} onSubmit={(tileIds) => emitSubmitTitle(tileIds)} />
 
           <div className="flex flex-col gap-4">
             <div>

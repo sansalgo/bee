@@ -11,11 +11,11 @@ export const BOARD_DROPPABLE_ID = "board-drop-area"
 
 export function Board({
   tiles,
-  disabled,
+  submitDisabled,
   onSubmit,
 }: {
   tiles: BoardTile[]
-  disabled: boolean
+  submitDisabled: boolean
   onSubmit: (tileIds: string[]) => void
 }) {
   const [selected, setSelected] = useState<string[]>([])
@@ -25,7 +25,6 @@ export function Board({
   const selectedTiles = selected.map((id) => tilesById.get(id)).filter((tile) => tile !== undefined)
 
   function toggle(id: string) {
-    if (disabled) return
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
   }
 
@@ -54,13 +53,11 @@ export function Board({
             <button
               key={tile.id}
               type="button"
-              disabled={disabled}
               onClick={() => toggle(tile.id)}
               style={{ position: "absolute", left: tile.x, top: tile.y }}
               className={cn(
                 "flex size-9 items-center justify-center border border-border bg-background text-sm font-medium shadow-sm transition-colors hover:bg-muted",
                 isSelected && "border-primary bg-primary text-primary-foreground",
-                disabled && "cursor-not-allowed opacity-50",
               )}
             >
               {tile.character}
@@ -81,7 +78,6 @@ export function Board({
             <button
               key={tile.id}
               type="button"
-              disabled={disabled}
               onClick={() => toggle(tile.id)}
               title="Remove from selection"
               className="flex size-8 items-center justify-center border border-primary bg-primary text-sm font-medium text-primary-foreground"
@@ -95,7 +91,7 @@ export function Board({
         <Button variant="outline" disabled={selected.length === 0} onClick={() => setSelected([])}>
           Clear
         </Button>
-        <Button className="flex-1" disabled={disabled || selected.length === 0} onClick={handleSubmit}>
+        <Button className="flex-1" disabled={submitDisabled || selected.length === 0} onClick={handleSubmit}>
           Submit Title ({selected.length})
         </Button>
       </div>
