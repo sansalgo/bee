@@ -5,9 +5,10 @@ import { useRouter } from "next/navigation"
 
 import { GameStatus } from "@workspace/shared"
 import { Button } from "@workspace/ui/components/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 
 import { PlayerList } from "@/components/game/player-list"
+import { ShareDialog } from "@/components/game/share-dialog"
 import { useGameSocket } from "@/hooks/use-game-socket"
 import { useRoomIdentity } from "@/hooks/use-room-identity"
 import { clearRoomIdentity } from "@/lib/room-storage"
@@ -52,6 +53,9 @@ export function LobbyClient({ code }: { code: string }) {
             Room {code}
             {!connected && <span className="ml-2 text-muted-foreground">(connecting...)</span>}
           </CardTitle>
+          <CardAction>
+            <ShareDialog code={code} />
+          </CardAction>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <PlayerList players={players} />
