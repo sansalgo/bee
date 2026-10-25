@@ -21,5 +21,5 @@
       "persistent": true
     }
   },
-  "globalEnv": ["DATABASE_URL", "PORT", "CORS_ORIGIN", "TURN_TIMER_TICK_MS", "NEXT_PUBLIC_API_URL"]
+  "globalEnv": ["DATABASE_URL", "PORT", "CORS_ORIGIN", "TURN_TIMER_TICK_MS", "TMDB_API_TOKEN", "ADMIN_TOKEN", "NEXT_PUBLIC_API_URL"]
 }

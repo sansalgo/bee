@@ -48,7 +48,15 @@ export function useGameSocket(identity: RoomIdentity | null) {
     socket.on(SocketEvent.PlayerReady, (payload: ScoreUpdatedPayload) => setPlayers(payload.players))
     socket.on(SocketEvent.BoardUpdated, (payload: BoardUpdatedPayload) => upsertTiles(payload.tiles))
     socket.on(SocketEvent.TurnStarted, (payload: TurnState) => setTurn(payload))
-    socket.on(SocketEvent.FindAccepted, (payload: FindAcceptedPayload) => addFind(payload))
+    socket.on(SocketEvent.FindAccepted, (payload: FindAcceptedPayload) => {
+      addFind(payload)
+      // Shown to everyone so players learn alternative names count too.
+      if (payload.viaAlias) {
+        toast.info(`${payload.builtText} → ${payload.matchedText}`, {
+          description: "Matched an alternative title",
+        })
+      }
+    })
     socket.on(SocketEvent.GameFinished, (payload: GameFinishedPayload) => setFinished(payload.players))
     socket.on(SocketEvent.FindRejected, (payload: FindRejectedPayload) => setRejection(payload.reason))
 

@@ -68,6 +68,10 @@ export type FindRejectedPayload = z.infer<typeof findRejectedPayloadSchema>
 export const findAcceptedPayloadSchema = z.object({
   playerId: z.string(),
   matchedText: z.string(),
+  // What the player actually built ("AVENGERS"); differs from matchedText's
+  // normalized form when the match came through an alternative name.
+  builtText: z.string(),
+  viaAlias: z.boolean(),
   pointsAwarded: z.number().int(),
   consumedTileIds: z.array(z.string()),
 })

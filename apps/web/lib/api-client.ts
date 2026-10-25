@@ -1,4 +1,8 @@
+import { ADMIN_TOKEN_HEADER } from "@workspace/shared"
 import type {
+  AdminMovie,
+  AdminMovieListQuery,
+  AdminMovieListResponse,
   CreateRoomRequest,
   CreateRoomResponse,
   JoinRoomRequest,
@@ -23,7 +27,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const message = Array.isArray(body.message) ? body.message.join(", ") : body.message
     throw new Error(message ?? `Request failed with status ${res.status}`)
   }
+  if (res.status === 204) {
+    return undefined as T
+  }
   return res.json() as Promise<T>
+}
+
+function adminRequest<T>(token: string, path: string, init?: RequestInit): Promise<T> {
+  return request<T>(path, { ...init, headers: { [ADMIN_TOKEN_HEADER]: token, ...init?.headers } })
 }
 
 export const apiClient = {
@@ -38,4 +49,26 @@ export const apiClient = {
     request<JoinRoomResponse>(`/rooms/${code}/join`, { method: "POST", body: JSON.stringify(body) }),
 
   getLeaderboard: (code: string) => request<PlayerSummary[]>(`/rooms/${code}/leaderboard`),
+
+  admin: {
+    listMovies: (token: string, query: AdminMovieListQuery) => {
+      const params = new URLSearchParams()
+      for (const [key, value] of Object.entries(query)) {
+        if (value) params.set(key, value)
+      }
+      return adminRequest<AdminMovieListResponse>(token, `/admin/movies?${params}`)
+    },
+
+    deleteMovie: (token: string, movieId: string) =>
+      adminRequest<void>(token, `/admin/movies/${movieId}`, { method: "DELETE" }),
+
+    deleteAlias: (token: string, aliasId: string) =>
+      adminRequest<void>(token, `/admin/movies/aliases/${aliasId}`, { method: "DELETE" }),
+
+    addAlias: (token: string, movieId: string, alias: string) =>
+      adminRequest<AdminMovie>(token, `/admin/movies/${movieId}/aliases`, {
+        method: "POST",
+        body: JSON.stringify({ alias }),
+      }),
+  },
 }

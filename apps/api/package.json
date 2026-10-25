@@ -13,7 +13,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
     "prisma:seed": "bun prisma/seed.ts",
-    "movies:import": "bun src/categories/movies/movies-import.script.ts"
+    "movies:import": "bun src/categories/movies/movies-import.script.ts",
+    "movies:enrich": "bun src/categories/movies/movies-enrich.script.ts"
   },
   "prisma": {
     "seed": "bun prisma/seed.ts"
