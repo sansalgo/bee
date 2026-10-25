@@ -6,6 +6,10 @@ export interface FindTitleAccepted {
   matched: true
   itemId: string
   matchedText: string
+  /** The characters the player actually built, e.g. "AVENGERS". */
+  builtText: string
+  /** True when the build matched an alternative name rather than matchedText itself. */
+  viaAlias: boolean
   pointsAwarded: number
   consumedTiles: RuntimeTile[]
 }
@@ -32,7 +36,8 @@ export async function applyFindTitle(game: RuntimeGame, plugin: ICategoryPlugin,
     selected.push(tile)
   }
 
-  const normalized = plugin.validator.normalize(selected.map((tile) => tile.character))
+  const builtChars = selected.map((tile) => tile.character)
+  const normalized = plugin.validator.normalize(builtChars)
   const candidates = await plugin.dataProvider.findByNormalizedKey(normalized)
   if (candidates.length === 0) {
     return { matched: false, reason: "Not a valid title" }
@@ -70,6 +75,8 @@ export async function applyFindTitle(game: RuntimeGame, plugin: ICategoryPlugin,
     matched: true,
     itemId: available.itemId,
     matchedText: available.matchedText,
+    builtText: builtChars.join(""),
+    viaAlias: plugin.validator.normalize([...available.matchedText]) !== normalized,
     pointsAwarded,
     consumedTiles: selected,
   }

@@ -144,6 +144,11 @@ model Find {
 
 // ---------- Category: Movies (v1 concrete plugin) ----------
 
+enum MovieSource {
+  SEED
+  TMDB
+}
+
 model Movie {
   id            String   @id @default(cuid())
   title         String
@@ -152,11 +157,41 @@ model Movie {
   // (see MoviesValidator.normalize) — the key used for tile-sequence matching.
   normalizedKey String
   isFixture     Boolean  @default(false)
+  // Set once a movie has been matched against TMDB (on-demand lookup or the
+  // enrich script). Unique so an external match never duplicates a movie we
+  // already store — it becomes an alias of the existing row instead.
+  tmdbId        Int?        @unique
+  source        MovieSource @default(SEED)
   createdAt     DateTime @default(now())
+
+  aliases MovieAlias[]
 
   // Same title text can legitimately recur across different release years
   // (e.g. remakes) — those are different records and both must be
   // independently findable. This constraint just makes re-imports idempotent.
   @@unique([normalizedKey, releaseYear])
   @@index([normalizedKey])
+}
+
+// Alternative names a movie can be found by ("Avengers" for "The Avengers",
+// TMDB alternative titles, ...). Matching checks Movie.normalizedKey and
+// these keys; the Find still records the canonical Movie.title.
+model MovieAlias {
+  id            String   @id @default(cuid())
+  movieId       String
+  movie         Movie    @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  alias         String
+  // normalizeMovieTitle(alias)
+  normalizedKey String
+  createdAt     DateTime @default(now())
+
+  @@unique([movieId, normalizedKey])
+  @@index([normalizedKey])
+}
+
+// Negative cache for external (TMDB) lookups, so a tile sequence that matched
+// nothing isn't re-queried on every submission. Entries expire by checkedAt.
+model MovieLookupMiss {
+  normalizedKey String   @id
+  checkedAt     DateTime @default(now()) @updatedAt
 }

@@ -30,6 +30,8 @@ export type FindTitleResult =
       matched: true
       itemId: string
       matchedText: string
+      builtText: string
+      viaAlias: boolean
       pointsAwarded: number
       consumedTiles: RuntimeTile[]
       players: RuntimePlayer[]
@@ -217,13 +219,19 @@ export class GamesService {
     const game = this.store.get(gameId)
     this.assertCurrentTurn(game, playerId)
 
+    const turnId = game.currentTurn!.turnId
+
     const plugin = this.categories.get(game.categoryKey)
     const result = await applyFindTitle(game, plugin, tileIds)
     if (!result.matched) {
       return { matched: false, reason: result.reason }
     }
-
-    const turnId = game.currentTurn!.turnId
+    // Matching can take a few seconds (on-demand external lookup), long
+    // enough for the turn timer to fire meanwhile — never credit a find to a
+    // turn that has already been resolved.
+    if (game.status !== PrismaGameStatus.IN_PROGRESS || game.currentTurn?.turnId !== turnId) {
+      return { matched: false, reason: "Your turn ended before the title could be checked" }
+    }
     await this.prisma.find.create({
       data: {
         gameId,
@@ -255,6 +263,8 @@ export class GamesService {
       matched: true,
       itemId: result.itemId,
       matchedText: result.matchedText,
+      builtText: result.builtText,
+      viaAlias: result.viaAlias,
       pointsAwarded: result.pointsAwarded,
       consumedTiles: result.consumedTiles,
       players: game.players,

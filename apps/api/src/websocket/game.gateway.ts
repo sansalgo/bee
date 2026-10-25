@@ -224,6 +224,8 @@ export class GameGateway implements OnGatewayInit, OnGatewayConnection, OnGatewa
     this.server.to(gameId).emit(SocketEvent.FindAccepted, {
       playerId,
       matchedText: result.matchedText,
+      builtText: result.builtText,
+      viaAlias: result.viaAlias,
       pointsAwarded: result.pointsAwarded,
       consumedTileIds: result.consumedTiles.map((tile) => tile.id),
     } satisfies FindAcceptedPayload)

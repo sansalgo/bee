@@ -1,7 +1,9 @@
 /**
  * Re-runnable importer for the user's own movie dataset (CSV or JSON), kept
  * separate from prisma/seed.ts (which only ever seeds small dev fixtures).
- * Safe to run repeatedly: rows are upserted on (normalizedKey, releaseYear).
+ * Safe to run repeatedly: rows are upserted on (normalizedKey, releaseYear),
+ * and derived aliases ("The Avengers" -> "Avengers") are (re)created, so
+ * re-running it also backfills aliases for movies imported before they existed.
  *
  * Usage:
  *   bun run movies:import -- --file ./my-movies.csv
@@ -15,7 +17,7 @@ import { extname } from "node:path"
 
 import { PrismaClient } from "@prisma/client"
 
-import { normalizeMovieTitle } from "./movies.normalize"
+import { upsertMovieWithAliases } from "./movies.persist"
 
 interface ImportRow {
   title: string
@@ -71,12 +73,7 @@ async function main() {
       console.warn(`Skipping invalid row: ${JSON.stringify(row)}`)
       continue
     }
-    const normalizedKey = normalizeMovieTitle(row.title)
-    await prisma.movie.upsert({
-      where: { normalizedKey_releaseYear: { normalizedKey, releaseYear: row.releaseYear } },
-      update: { title: row.title },
-      create: { title: row.title, releaseYear: row.releaseYear, normalizedKey, isFixture: false },
-    })
+    await upsertMovieWithAliases(prisma, { title: row.title, releaseYear: row.releaseYear })
     imported++
   }
   await prisma.$disconnect()
